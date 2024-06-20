@@ -21,7 +21,9 @@ public class JobTriggerPoolHelper {
     // ---------------------- trigger pool ----------------------
 
     // fast/slow thread pool
+    // 快线程池
     private ThreadPoolExecutor fastTriggerPool = null;
+    // 慢线程池
     private ThreadPoolExecutor slowTriggerPool = null;
 
     public void start(){
@@ -77,13 +79,16 @@ public class JobTriggerPoolHelper {
                            final String addressList) {
 
         // choose thread pool
+        // 默认是快线程池
         ThreadPoolExecutor triggerPool_ = fastTriggerPool;
         AtomicInteger jobTimeoutCount = jobTimeoutCountMap.get(jobId);
+        // 如果慢执行次数不为空并且一分钟内超过了10了，那么就用慢线程执行
         if (jobTimeoutCount!=null && jobTimeoutCount.get() > 10) {      // job-timeout 10 times in 1 min
             triggerPool_ = slowTriggerPool;
         }
 
         // trigger
+        // 将任务交给线程池
         triggerPool_.execute(new Runnable() {
             @Override
             public void run() {
@@ -92,12 +97,14 @@ public class JobTriggerPoolHelper {
 
                 try {
                     // do trigger
+                    // 触发器执行任务
                     XxlJobTrigger.trigger(jobId, triggerType, failRetryCount, executorShardingParam, executorParam, addressList);
                 } catch (Exception e) {
                     logger.error(e.getMessage(), e);
                 } finally {
 
                     // check timeout-count-map
+                    // 将当前的分钟数和上面的分钟数进行对比，如果不等，说明已经超过了一分钟，那么清空慢执行map
                     long minTim_now = System.currentTimeMillis()/60000;
                     if (minTim != minTim_now) {
                         minTim = minTim_now;
@@ -105,6 +112,7 @@ public class JobTriggerPoolHelper {
                     }
 
                     // incr timeout-count-map
+                    // 任务的执行时间如果超过了500ms，那么记一次
                     long cost = System.currentTimeMillis()-start;
                     if (cost > 500) {       // ob-timeout threshold 500ms
                         AtomicInteger timeoutCount = jobTimeoutCountMap.putIfAbsent(jobId, new AtomicInteger(1));
